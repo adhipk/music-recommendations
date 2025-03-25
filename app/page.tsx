@@ -1,103 +1,181 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import axios from "axios";
+
+interface SearchResult {
+  id: string;
+  score: number;
+  payload: {
+    title: string;
+    artists: string;
+    body: string;
+    score: number;
+    review_url: string;
+  };
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await axios.post("/api/search", { query });
+      console.log("Search response:", response.data);
+      setResults(response.data.result);
+    } catch (err) {
+      setError("Failed to perform search. Please try again.");
+      console.error("Search error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getFullUrl = (relativeUrl: string) => {
+    if (!relativeUrl) return "#";
+    if (relativeUrl.startsWith("http")) return relativeUrl;
+    return `https://pitchfork.com${relativeUrl}`;
+  };
+
+  const highlightRelevantText = (
+    text: string | undefined,
+    query: string
+  ): string => {
+    if (!text) return "No review text available.";
+    if (!query) return text;
+
+    try {
+      // Split the text into sentences, handling various sentence endings
+      const sentences = text
+        .split(/[.!?]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      if (sentences.length === 0) return text;
+
+      // Find sentences that contain words from the query
+      const queryWords = query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 0);
+      const relevantSentences = sentences.filter((sentence) =>
+        queryWords.some((word) => sentence.toLowerCase().includes(word))
+      );
+
+      // If we found relevant sentences, return them with highlighting
+      if (relevantSentences.length > 0) {
+        return relevantSentences
+          .map((sentence) =>
+            queryWords.reduce(
+              (acc, word) =>
+                acc.replace(
+                  new RegExp(word, "gi"),
+                  (match) => `<mark class="bg-yellow-100">${match}</mark>`
+                ),
+              sentence
+            )
+          )
+          .join(". ");
+      }
+
+      // If no relevant sentences found, return the first few sentences
+      return sentences.slice(0, 2).join(". ") + ".";
+    } catch (err) {
+      console.error("Error highlighting text:", err);
+      return text;
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-bold text-center text-gray-900 mb-8">
+          Pitchfork Review Search
+        </h1>
+
+        <form onSubmit={handleSearch} className="mb-8">
+          <div className="relative">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search for music reviews (e.g., 'party', 'breakup', 'summer vibes')"
+              className="w-full px-4 py-3 pl-12 text-lg border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            <MagnifyingGlassIcon className="absolute left-4 top-3.5 h-6 w-6 text-gray-400" />
+          </div>
+        </form>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center text-gray-600">Searching...</div>
+        ) : (
+          <div className="space-y-6">
+            {results.map((result) => (
+              <div
+                key={result.id}
+                className="bg-white p-6 rounded-lg shadow-sm border border-gray-200"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {result.payload.title}
+                    </h2>
+                    <p className="text-gray-600">{result.payload.artists}</p>
+                  </div>
+                  <span className="text-2xl font-bold text-blue-600">
+                    {result.payload.score}
+                  </span>
+                </div>
+                <div className="mb-4">
+                  <p className="text-gray-700">
+                    <span className="font-medium text-gray-900">
+                      Relevant context:{" "}
+                    </span>
+                    <span className="italic">
+                      {result.payload.body.split(/[.!?]+/)[0] + "."}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    This album was selected based on semantic similarity to your
+                    search query, not just keyword matching. The similarity
+                    score ({(result.score * 100).toFixed(2)}%) indicates how
+                    closely the review's meaning matches your search intent.
+                  </p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <a
+                    href={getFullUrl(result.payload.review_url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    Read full review →
+                  </a>
+                  <div className="text-sm text-gray-500">
+                    Similarity score: {(result.score * 100).toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
