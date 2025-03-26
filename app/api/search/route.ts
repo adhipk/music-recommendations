@@ -6,6 +6,7 @@ const QDRANT_URL = process.env.QDRANT_URL;
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
 
 // Initialize text embedder
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let textEmbedder: any = null;
 
 async function getTextEmbedder() {
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
 
     // Get text embedding
     const vector = await getTextEmbedding(query);
-
+    console.log('envs', QDRANT_API_KEY, QDRANT_URL);
     const response = await axios.post(
       `${QDRANT_URL}/collections/music_reviews/points/search`,
       {
