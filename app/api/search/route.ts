@@ -1,32 +1,5 @@
 import { NextResponse } from "next/server";
-import axios from "axios";
-import { pipeline } from "@xenova/transformers";
-
-const QDRANT_URL = process.env.QDRANT_URL;
-const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
-
-// Initialize text embedder
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let textEmbedder: any = null;
-
-async function getTextEmbedder() {
-  if (!textEmbedder) {
-    textEmbedder = await pipeline(
-      "feature-extraction",
-      "Xenova/all-MiniLM-L6-v2"
-    );
-  }
-  return textEmbedder;
-}
-
-async function getTextEmbedding(text: string) {
-  const embedder = await getTextEmbedder();
-  const output = await embedder(text, {
-    pooling: "mean",
-    normalize: true,
-  });
-  return Array.from(output.data);
-}
+import { getClient } from "@/lib/weaviate";
 
 export async function POST(request: Request) {
   try {
@@ -36,25 +9,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
-    // Get text embedding
-    const vector = await getTextEmbedding(query);
-    console.log('envs', QDRANT_API_KEY, QDRANT_URL);
-    const response = await axios.post(
-      `${QDRANT_URL}/collections/music_reviews/points/search`,
-      {
-        vector,
+    const client = await getClient();
+    
+    // Perform semantic search using Weaviate
+    const searchResult = await client.collections
+      .get("MusicReviews")
+      .query()
+      .nearText(query, {
         limit: 10,
-        with_payload: true,
-      },
-      {
-        headers: {
-          "api-key": QDRANT_API_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+        returnMetadata: ["distance"],
+      })
+      .do();
 
-    return NextResponse.json(response.data);
+    // Transform the results to match the expected format
+    const transformedResults = searchResult.objects.map((obj: any) => ({
+      id: obj.uuid,
+      score: 1 - (obj.metadata?.distance || 0), // Convert distance to similarity score
+      payload: {
+        title: obj.properties.title,
+        artists: obj.properties.artists,
+        body: obj.properties.body,
+        score: obj.properties.score,
+        review_url: obj.properties.review_url,
+      },
+    }));
+
+    return NextResponse.json({ result: transformedResults });
   } catch (error) {
     console.error("Search error:", error);
     return NextResponse.json(
